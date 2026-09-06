@@ -13,17 +13,23 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.api.health import router as health_router
+from app.api.departments import router as departments_router
+from app.api.services import router as services_router
+from app.api.citizens import router as citizens_router
 
 setup_logging()
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="AI-Powered Civic Service, Application and Grievance Assistant (student capstone project)",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 # Every router we add gets included here, one line each.
 app.include_router(health_router, tags=["Health"])
+app.include_router(departments_router)
+app.include_router(services_router)
+app.include_router(citizens_router)
 
 
 @app.get("/")

@@ -90,11 +90,78 @@ INFO:     Uvicorn running on http://127.0.0.1:8000
 - **`app/api/health.py`** — one endpoint, `/health`, whose only job is to
   say "I'm alive." Used later by Docker/monitoring to check the app is up.
 
+## Phase 2 — CRUD for Department, Service, Citizen
+
+New files added:
+```
+app/
+├── schemas/
+│   ├── department.py   # DepartmentCreate / Update / Out
+│   ├── service.py      # ServiceCreate / Update / Out
+│   └── citizen.py      # CitizenCreate / Update / Out
+├── api/
+│   ├── departments.py  # /departments CRUD
+│   ├── services.py     # /services CRUD
+│   └── citizens.py     # /citizens CRUD
+└── core/
+    └── fake_db.py       # TEMPORARY in-memory storage (Phase 3 replaces this)
+```
+
+### How to run it
+
+You already have the venv set up from Phase 1. Just pull/copy these new
+files into your project, then:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload
+```
+
+### How to test it (no coding needed — use Swagger UI)
+
+1. Open **http://127.0.0.1:8000/docs**
+2. You'll now see three new sections: **Departments**, **Services**, **Citizens**.
+3. Try this exact sequence to see the whole flow work:
+   - `POST /departments` → click "Try it out" → use the example body → Execute.
+     You'll get back an object with `"id": 1`.
+   - `GET /departments` → Execute → you'll see the department you just created.
+   - `POST /services` → set `"department_id": 1` (matching what you just created)
+     → Execute. If you use a department_id that doesn't exist, you'll correctly
+     get a `400 Bad Request` — try it to see the validation in action.
+   - `POST /citizens` → Execute with any `user_id` for now (auth isn't built yet).
+   - `GET /services?department_id=1` → shows the department filter working.
+   - `PUT /departments/1` → send just `{"description": "Updated description"}`
+     → Execute → notice only that field changed, everything else stayed the same.
+   - `DELETE /departments/1` → Execute → then `GET /departments/1` → you'll get
+     a `404 Not Found`, confirming it's gone.
+
+**Important:** since this is in-memory storage, if you stop the server
+(Ctrl+C) and restart it, everything you created will disappear. That's
+expected — this gets fixed in Phase 3 with a real PostgreSQL database.
+
+### Concepts this phase teaches
+
+- **Pydantic schemas** separate "what the client sends" (Create/Update)
+  from "what we send back" (Out) — the client can never invent their own `id`.
+- **`exclude_unset=True`** on updates means "only touch the fields the
+  client actually included in the request" — this is what makes partial
+  updates (PATCH-style behavior via PUT here) work correctly.
+- **HTTP status codes are meaningful**: 201 for created, 204 for deleted
+  (nothing to return), 404 for missing, 400 for a bad request like a
+  non-existent department_id.
+
+### Don't forget to commit
+
+```powershell
+git add .
+git commit -m "Phase 2: Pydantic schemas + CRUD for Department, Service, Citizen (in-memory)"
+git push
+```
+
 ## Next phase
 
-**Phase 2** adds Pydantic schemas and the first real CRUD endpoints
-(Department, Service, Citizen) — still without a database, using
-temporary in-memory storage, so you can understand request/response
-validation before we bring PostgreSQL into the picture.
+**Phase 3** replaces `fake_db.py` with a real PostgreSQL database:
+SQLAlchemy models, a database session, and Alembic migrations so your
+data survives restarts and the team can share one schema.
 
-Just say "next phase" when you're ready and I'll build it the same way.
+Just say "next phase" when you're ready.
