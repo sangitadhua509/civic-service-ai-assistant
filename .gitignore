@@ -1,0 +1,19 @@
+# Environment secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Databases / vector index (added in later phases)
+data/vector_index/
+data/storage/
+*.sqlite3
+
+# OS / editor junk
+.DS_Store
+.vscode/
+.idea/
