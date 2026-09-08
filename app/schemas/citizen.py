@@ -6,7 +6,7 @@ as plain input.
 """
 
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class CitizenCreate(BaseModel):
@@ -24,6 +24,8 @@ class CitizenUpdate(BaseModel):
 
 
 class CitizenOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     phone: str

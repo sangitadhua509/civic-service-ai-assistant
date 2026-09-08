@@ -19,7 +19,7 @@ side. Separating "in" shapes from "out" shapes prevents that.
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class DepartmentCreate(BaseModel):
@@ -35,6 +35,8 @@ class DepartmentUpdate(BaseModel):
 
 
 class DepartmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     code: str

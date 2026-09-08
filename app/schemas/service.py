@@ -9,7 +9,7 @@ brief calls a "JSONB required-document list."
 """
 
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ServiceCreate(BaseModel):
@@ -33,6 +33,8 @@ class ServiceUpdate(BaseModel):
 
 
 class ServiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     department_id: int
     name: str

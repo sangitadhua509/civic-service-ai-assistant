@@ -1,67 +1,77 @@
 """
-CRUD endpoints for Service (the service catalogue).
+Service CRUD, now backed by PostgreSQL.
 
-The one new idea here: a Service always belongs to a Department, so on
-create we check that `department_id` actually exists first. This is a
-simple version of what a real foreign key constraint in PostgreSQL will
-enforce automatically starting Phase 3.
+Notice we DELETED the manual "if department_id not in fake_db" check
+from Phase 2 — we don't need it anymore. The `ForeignKey("departments.id")`
+on the Service model means PostgreSQL itself rejects an invalid
+department_id with an IntegrityError, which we catch below and turn
+into a clean 400 response. The database is now doing validation work
+for us.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
-from app.core import fake_db
+from app.db.session import get_db
+from app.db.models.service import Service
 from app.schemas.service import ServiceCreate, ServiceUpdate, ServiceOut
 
 router = APIRouter(prefix="/services", tags=["Services"])
 
 
 @router.post("", response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
-def create_service(payload: ServiceCreate):
-    if payload.department_id not in fake_db.departments:
+def create_service(payload: ServiceCreate, db: Session = Depends(get_db)):
+    service = Service(**payload.model_dump())
+    db.add(service)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Department {payload.department_id} does not exist",
+            detail="Invalid department_id, or a service with that code already exists",
         )
-    new_id = fake_db.next_service_id()
-    record = {"id": new_id, **payload.model_dump()}
-    fake_db.services[new_id] = record
-    return record
+    db.refresh(service)
+    return service
 
 
 @router.get("", response_model=list[ServiceOut])
-def list_services(department_id: int | None = None):
-    """
-    Optional filter: GET /services?department_id=1
-    This is the "search/filter services by department" extra feature
-    from the brief, in its simplest possible form.
-    """
-    values = list(fake_db.services.values())
+def list_services(department_id: int | None = None, db: Session = Depends(get_db)):
+    query = db.query(Service)
     if department_id is not None:
-        values = [s for s in values if s["department_id"] == department_id]
-    return values
+        query = query.filter(Service.department_id == department_id)
+    return query.all()
 
 
 @router.get("/{service_id}", response_model=ServiceOut)
-def get_service(service_id: int):
-    record = fake_db.services.get(service_id)
-    if record is None:
+def get_service(service_id: int, db: Session = Depends(get_db)):
+    service = db.get(Service, service_id)
+    if service is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
-    return record
+    return service
 
 
 @router.put("/{service_id}", response_model=ServiceOut)
-def update_service(service_id: int, payload: ServiceUpdate):
-    record = fake_db.services.get(service_id)
-    if record is None:
+def update_service(service_id: int, payload: ServiceUpdate, db: Session = Depends(get_db)):
+    service = db.get(Service, service_id)
+    if service is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+
     updates = payload.model_dump(exclude_unset=True)
-    record.update(updates)
-    return record
+    for field, value in updates.items():
+        setattr(service, field, value)
+
+    db.commit()
+    db.refresh(service)
+    return service
 
 
 @router.delete("/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_service(service_id: int):
-    if service_id not in fake_db.services:
+def delete_service(service_id: int, db: Session = Depends(get_db)):
+    service = db.get(Service, service_id)
+    if service is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
-    del fake_db.services[service_id]
+    db.delete(service)
+    db.commit()
     return None

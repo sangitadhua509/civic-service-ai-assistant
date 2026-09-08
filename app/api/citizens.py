@@ -1,54 +1,73 @@
 """
-CRUD endpoints for Citizen profiles.
+Citizen CRUD, now backed by PostgreSQL.
 
-Right now anyone can create/view/edit any citizen record — there's no
-login system yet. From Phase 4 onwards, we'll lock this down so a
-citizen can only ever see and edit THEIR OWN profile (the "ownership
-check" the brief requires). For now, focus on the shape of the API.
+Heads up: `user_id` is a real foreign key to the `users` table now.
+Since we haven't built the register/login endpoints yet (that's
+Phase 4), there won't be any real users to attach a citizen to unless
+you run the seed script (scripts/seed_sample_data.py) first, which
+creates a couple of placeholder users for testing.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
-from app.core import fake_db
+from app.db.session import get_db
+from app.db.models.citizen import Citizen
 from app.schemas.citizen import CitizenCreate, CitizenUpdate, CitizenOut
 
 router = APIRouter(prefix="/citizens", tags=["Citizens"])
 
 
 @router.post("", response_model=CitizenOut, status_code=status.HTTP_201_CREATED)
-def create_citizen(payload: CitizenCreate):
-    new_id = fake_db.next_citizen_id()
-    record = {"id": new_id, **payload.model_dump()}
-    fake_db.citizens[new_id] = record
-    return record
+def create_citizen(payload: CitizenCreate, db: Session = Depends(get_db)):
+    citizen = Citizen(**payload.model_dump())
+    db.add(citizen)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user_id, or that user already has a citizen profile",
+        )
+    db.refresh(citizen)
+    return citizen
 
 
 @router.get("", response_model=list[CitizenOut])
-def list_citizens():
-    return list(fake_db.citizens.values())
+def list_citizens(db: Session = Depends(get_db)):
+    return db.query(Citizen).all()
 
 
 @router.get("/{citizen_id}", response_model=CitizenOut)
-def get_citizen(citizen_id: int):
-    record = fake_db.citizens.get(citizen_id)
-    if record is None:
+def get_citizen(citizen_id: int, db: Session = Depends(get_db)):
+    citizen = db.get(Citizen, citizen_id)
+    if citizen is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Citizen not found")
-    return record
+    return citizen
 
 
 @router.put("/{citizen_id}", response_model=CitizenOut)
-def update_citizen(citizen_id: int, payload: CitizenUpdate):
-    record = fake_db.citizens.get(citizen_id)
-    if record is None:
+def update_citizen(citizen_id: int, payload: CitizenUpdate, db: Session = Depends(get_db)):
+    citizen = db.get(Citizen, citizen_id)
+    if citizen is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Citizen not found")
+
     updates = payload.model_dump(exclude_unset=True)
-    record.update(updates)
-    return record
+    for field, value in updates.items():
+        setattr(citizen, field, value)
+
+    db.commit()
+    db.refresh(citizen)
+    return citizen
 
 
 @router.delete("/{citizen_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_citizen(citizen_id: int):
-    if citizen_id not in fake_db.citizens:
+def delete_citizen(citizen_id: int, db: Session = Depends(get_db)):
+    citizen = db.get(Citizen, citizen_id)
+    if citizen is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Citizen not found")
-    del fake_db.citizens[citizen_id]
+    db.delete(citizen)
+    db.commit()
     return None

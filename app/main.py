@@ -12,6 +12,13 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.core.logging import setup_logging
+
+# Import every SQLAlchemy model together, exactly once, before anything
+# else touches the database. This guarantees relationships that refer
+# to each other by name (e.g. User.citizen_profile -> "Citizen") can
+# always be resolved, no matter which router file happens to run first.
+import app.db.base  # noqa: F401
+
 from app.api.health import router as health_router
 from app.api.departments import router as departments_router
 from app.api.services import router as services_router
