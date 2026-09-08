@@ -1,12 +1,6 @@
 """
-Service CRUD, now backed by PostgreSQL.
-
-Notice we DELETED the manual "if department_id not in fake_db" check
-from Phase 2 — we don't need it anymore. The `ForeignKey("departments.id")`
-on the Service model means PostgreSQL itself rejects an invalid
-department_id with an IntegrityError, which we catch below and turn
-into a clean 400 response. The database is now doing validation work
-for us.
+Same pattern as departments.py: reading the catalogue is public,
+writing to it requires an admin token.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,11 +10,17 @@ from sqlalchemy.exc import IntegrityError
 from app.db.session import get_db
 from app.db.models.service import Service
 from app.schemas.service import ServiceCreate, ServiceUpdate, ServiceOut
+from app.api.deps import require_roles
 
 router = APIRouter(prefix="/services", tags=["Services"])
 
 
-@router.post("", response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ServiceOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def create_service(payload: ServiceCreate, db: Session = Depends(get_db)):
     service = Service(**payload.model_dump())
     db.add(service)
@@ -52,7 +52,11 @@ def get_service(service_id: int, db: Session = Depends(get_db)):
     return service
 
 
-@router.put("/{service_id}", response_model=ServiceOut)
+@router.put(
+    "/{service_id}",
+    response_model=ServiceOut,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def update_service(service_id: int, payload: ServiceUpdate, db: Session = Depends(get_db)):
     service = db.get(Service, service_id)
     if service is None:
@@ -67,7 +71,11 @@ def update_service(service_id: int, payload: ServiceUpdate, db: Session = Depend
     return service
 
 
-@router.delete("/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{service_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles("admin"))],
+)
 def delete_service(service_id: int, db: Session = Depends(get_db)):
     service = db.get(Service, service_id)
     if service is None:

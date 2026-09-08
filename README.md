@@ -274,10 +274,120 @@ git commit -m "Phase 3: PostgreSQL database, SQLAlchemy models, Alembic migratio
 git push
 ```
 
+## Phase 4 — Authentication, JWT, and role-based access
+
+New/changed files:
+```
+app/
+├── core/
+│   └── security.py       # password hashing + JWT create/decode
+├── schemas/
+│   ├── auth.py            # UserRegister, Token
+│   └── user.py            # UserOut (never includes the password)
+└── api/
+    ├── deps.py             # get_current_user, require_roles()
+    └── auth.py             # /auth/register, /auth/login, /auth/me
+```
+Changed: `departments.py` and `services.py` (writes now admin-only),
+`citizens.py` (full ownership enforcement), `schemas/citizen.py`
+(user_id no longer client-supplied), `scripts/seed_sample_data.py`
+(now creates real, working login accounts for all 3 roles).
+
+### 1. Install the new packages
+
+```powershell
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 2. Update your `.env`
+
+Add these three lines (copy from the updated `.env.example`):
+```
+JWT_SECRET_KEY=civic-service-dev-secret-change-this-to-something-random
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+```
+
+### 3. Reset and reseed your database
+
+Your Phase 3 seed data has fake, unusable passwords. Open **pgAdmin →
+civic_db → Query Tool** and run:
+```sql
+TRUNCATE citizens, services, departments, users RESTART IDENTITY CASCADE;
+```
+Then reseed with real credentials:
+```powershell
+python scripts/seed_sample_data.py
+```
+This prints out three working test accounts:
+```
+ADMIN    email=admin@example.com    password=AdminPass123
+OFFICER  email=officer@example.com  password=OfficerPass123
+CITIZEN  email=citizen@example.com  password=CitizenPass123
+```
+
+### 4. Run the server and test the whole auth flow
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+In `/docs`:
+
+1. **Register a brand-new citizen:** `POST /auth/register` with your
+   own name/email/password → confirm you get back a `201` with your
+   new user's id and `"role": "citizen"`.
+2. **Log in:** `POST /auth/login` — note this endpoint takes FORM
+   fields, not JSON (Swagger shows separate boxes for `username` and
+   `password` — put your EMAIL in the `username` box). Execute →
+   copy the `access_token` from the response.
+3. **Use the green "Authorize" button** at the top right of `/docs`:
+   click it, paste in the email/password you just used (Swagger fills
+   the token in for you automatically), click Authorize, then Close.
+   Now every "Try it out" call includes your token automatically.
+4. **Call `GET /auth/me`** → confirms your token works and shows your
+   own user info.
+5. **Try `POST /departments`** while logged in as your new citizen
+   account → you should get a **403 Forbidden** ("requires one of
+   these roles: admin"). This proves role protection is working.
+6. **Log out (click Authorize → Logout) and log back in as the admin**
+   test account → now `POST /departments` should succeed.
+7. **Test ownership:** log in as the citizen test account, run
+   `POST /citizens` to create your profile (no `user_id` needed
+   anymore — it's taken from your token). Then log in as the OFFICER
+   account and run `GET /citizens` — you should see every citizen.
+   Log back in as a DIFFERENT citizen account (register a second one)
+   and try `GET /citizens/{id}` on the first citizen's id → you should
+   get a **403**, proving ownership enforcement works.
+
+### Concepts this phase teaches
+
+- **Never store real passwords** — only bcrypt hashes. `verify_password`
+  re-hashes the login attempt and compares, it never "decrypts" anything.
+- **JWT tokens carry identity + role** — once decoded and verified,
+  the server trusts `sub` (user id) and `role` without hitting the
+  database again for permission checks.
+- **`Depends()` chains** — `require_roles("admin")` is built ON TOP OF
+  `get_current_user`, which is built on top of decoding the raw
+  token. Each layer adds one more guarantee.
+- **Ownership vs role** — two different questions: "what role do you
+  have" (department-level permissions) vs "is this specifically YOUR
+  record" (citizen profile access). Real systems need both.
+
+### Don't forget to commit
+
+```powershell
+git add .
+git commit -m "Phase 4: authentication, JWT, role-based access, ownership checks"
+git push
+```
+
 ## Next phase
 
-**Phase 4** adds real authentication: password hashing, `/auth/register`
-and `/auth/login` endpoints, JWT tokens, and role-based permission
-checks (admin / officer / citizen) so routes actually get protected.
+**Phase 5** builds the actual citizen-facing workflows: submitting a
+service application (with an auto-generated reference number),
+officers updating application status through controlled transitions,
+and the full grievance submit → officer response cycle.
 
 Just say "next phase" when you're ready.

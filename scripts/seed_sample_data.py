@@ -1,19 +1,22 @@
 """
 Run this ONCE after your database tables exist (i.e. after
-`alembic upgrade head`) to fill in some fictional starter data.
+`alembic upgrade head`) to fill in fictional starter data — including
+three real, working login accounts (admin, officer, citizen) so you
+can test role-based access without registering a dozen accounts by
+hand.
 
 Run it with:
     python scripts/seed_sample_data.py
 
-Why this exists: Service needs a real department_id, and Citizen needs
-a real user_id. Since Phase 4 (login/register) isn't built yet, this
-script creates a couple of placeholder User rows so you have something
-valid to test Citizen creation against.
+IMPORTANT: if you ran this script back in Phase 3 (before auth
+existed), your database already has an "officer" and "citizen" user
+with FAKE, unusable passwords. This script will detect existing data
+and skip — you need to clear those old rows first. Easiest way: open
+pgAdmin -> civic_db -> Query Tool, and run:
 
-NOTE: the "hashed_password" values here are just placeholder text, NOT
-real password hashes — that's intentional, since real password hashing
-gets built in Phase 4. Don't rely on these accounts for actual login
-later; Phase 4 will likely want you to register fresh ones properly.
+    TRUNCATE citizens, services, departments, users RESTART IDENTITY CASCADE;
+
+Then run this script again.
 """
 
 import sys
@@ -22,19 +25,23 @@ import os
 sys.path.append(os.getcwd())
 
 from app.db.session import SessionLocal
-# Import via app.db.base (not the individual model files directly) so that
-# EVERY model — including Citizen — is loaded into SQLAlchemy's registry
-# before any query runs. User.citizen_profile refers to "Citizen" by name,
-# and SQLAlchemy can only resolve that name if Citizen's module has already
-# been imported somewhere in the running process.
 from app.db.base import User, Department, Service
+from app.core.security import hash_password
+
+
+# These are PLAINTEXT passwords, used only to create test accounts.
+# In a real deployment these would never appear in source code.
+SAMPLE_ADMIN_PASSWORD = "AdminPass123"
+SAMPLE_OFFICER_PASSWORD = "OfficerPass123"
+SAMPLE_CITIZEN_PASSWORD = "CitizenPass123"
 
 
 def run():
     db = SessionLocal()
     try:
         if db.query(Department).count() > 0:
-            print("Sample data already exists — skipping. Delete rows manually if you want to reseed.")
+            print("Sample data already exists — skipping.")
+            print("See the note at the top of this file if you need to reset and reseed.")
             return
 
         water_dept = Department(
@@ -48,7 +55,7 @@ def run():
             description="Handles sanitation and public health certificates (fictional/sample department).",
         )
         db.add_all([water_dept, health_dept])
-        db.flush()  # assigns ids without fully committing yet
+        db.flush()
 
         new_connection = Service(
             department_id=water_dept.id,
@@ -72,26 +79,33 @@ def run():
         )
         db.add_all([new_connection, health_certificate])
 
-        sample_officer = User(
+        admin_user = User(
+            name="Sample Admin",
+            email="admin@example.com",
+            hashed_password=hash_password(SAMPLE_ADMIN_PASSWORD),
+            role="admin",
+        )
+        officer_user = User(
             name="Sample Officer",
             email="officer@example.com",
-            hashed_password="placeholder-not-a-real-hash",
+            hashed_password=hash_password(SAMPLE_OFFICER_PASSWORD),
             role="officer",
         )
-        sample_citizen_user = User(
+        citizen_user = User(
             name="Sample Citizen",
             email="citizen@example.com",
-            hashed_password="placeholder-not-a-real-hash",
+            hashed_password=hash_password(SAMPLE_CITIZEN_PASSWORD),
             role="citizen",
         )
-        db.add_all([sample_officer, sample_citizen_user])
+        db.add_all([admin_user, officer_user, citizen_user])
 
         db.commit()
-        print("Seed complete:")
-        print(f"  Department ids: {water_dept.id} ({water_dept.code}), {health_dept.id} ({health_dept.code})")
-        print(f"  Service ids: {new_connection.id}, {health_certificate.id}")
-        print(f"  User ids: {sample_officer.id} (officer), {sample_citizen_user.id} (citizen)")
-        print(f"  -> Use user_id={sample_citizen_user.id} when testing POST /citizens")
+        print("Seed complete. Test accounts (use these in POST /auth/login):")
+        print(f"  ADMIN    email=admin@example.com    password={SAMPLE_ADMIN_PASSWORD}")
+        print(f"  OFFICER  email=officer@example.com  password={SAMPLE_OFFICER_PASSWORD}")
+        print(f"  CITIZEN  email=citizen@example.com  password={SAMPLE_CITIZEN_PASSWORD}")
+        print(f"Department ids: {water_dept.id} ({water_dept.code}), {health_dept.id} ({health_dept.code})")
+        print(f"Service ids: {new_connection.id}, {health_certificate.id}")
     finally:
         db.close()
 

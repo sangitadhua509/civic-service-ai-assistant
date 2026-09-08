@@ -7,3 +7,9 @@ python-dotenv==1.0.1
 sqlalchemy>=2.0.41,<2.1
 psycopg[binary]>=3.2.3
 alembic>=1.13.3
+
+# Phase 4 — authentication
+bcrypt>=4.2.0
+pyjwt>=2.9.0
+python-multipart>=0.0.9
+email-validator>=2.2.0
