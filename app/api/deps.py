@@ -64,3 +64,25 @@ def require_roles(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+def get_current_citizen_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Applications and grievances belong to a CITIZEN profile, not
+    directly to a User — so before a citizen can submit either one,
+    they need to already have created their profile (Phase 4's
+    POST /citizens). This dependency fetches that profile or raises a
+    clear error telling them what to do instead of a confusing 500.
+    """
+    from app.db.models.citizen import Citizen  # local import avoids a circular import
+
+    citizen = db.query(Citizen).filter(Citizen.user_id == current_user.id).first()
+    if citizen is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Create your citizen profile first (POST /citizens) before applying for services.",
+        )
+    return citizen

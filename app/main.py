@@ -2,10 +2,9 @@
 This is the entry point of the whole backend.
 Running `uvicorn app.main:app --reload` starts this file.
 
-Right now it only wires up the health check. In later phases we will
-add: /auth, /departments, /services, /citizens, /applications,
-/grievances, /documents, /chat — each as its own router file, plugged
-in here the same way health.router is plugged in below.
+Each feature area (auth, departments, services, citizens,
+applications, grievances) lives in its own router file under
+app/api/, and gets plugged in below with one line each.
 """
 
 from fastapi import FastAPI
@@ -24,13 +23,15 @@ from app.api.auth import router as auth_router
 from app.api.departments import router as departments_router
 from app.api.services import router as services_router
 from app.api.citizens import router as citizens_router
+from app.api.applications import router as applications_router
+from app.api.grievances import router as grievances_router
 
 setup_logging()
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="AI-Powered Civic Service, Application and Grievance Assistant (student capstone project)",
-    version="0.4.0",
+    version="0.5.0",
 )
 
 # Every router we add gets included here, one line each.
@@ -39,6 +40,8 @@ app.include_router(auth_router)
 app.include_router(departments_router)
 app.include_router(services_router)
 app.include_router(citizens_router)
+app.include_router(applications_router)
+app.include_router(grievances_router)
 
 
 @app.get("/")

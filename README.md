@@ -383,11 +383,107 @@ git commit -m "Phase 4: authentication, JWT, role-based access, ownership checks
 git push
 ```
 
+## Phase 5 — Service applications, grievances, and controlled workflows
+
+New files:
+```
+app/
+├── db/models/
+│   ├── service_application.py   # ServiceApplication table
+│   └── grievance.py              # Grievance table
+├── schemas/
+│   ├── service_application.py    # ApplicationCreate/StatusUpdate/Out
+│   └── grievance.py               # GrievanceCreate/Respond/Out
+├── services/
+│   ├── reference_service.py       # generates SA-000123 style reference numbers
+│   └── workflow.py                # the ONLY place status transition rules live
+└── api/
+    ├── applications.py            # /applications
+    └── grievances.py               # /grievances
+```
+Changed: `app/api/deps.py` gained `get_current_citizen_profile` (fetches
+the logged-in user's Citizen row, or gives a clear error telling them
+to create one first).
+
+### 1. Generate and run the new migration
+
+No new packages needed this phase — just new tables.
+
+```powershell
+.\venv\Scripts\Activate.ps1
+alembic revision --autogenerate -m "add service applications and grievances"
+alembic upgrade head
+```
+
+Check pgAdmin → civic_db → Tables — you should now see
+`service_applications` and `grievances` alongside the existing four.
+
+### 2. Run the server
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+### 3. Test the full application workflow
+
+Log in as the CITIZEN test account via Authorize, then:
+
+1. **`POST /applications`** with `service_id: 1` (the seeded "New Water
+   Connection" service) and any payload → you get back a
+   `reference_no` like `SA-000001`. Notice: no citizen_id or status
+   field to fill in — those come from your token and default automatically.
+2. **`GET /applications`** → shows only your own application(s).
+3. **`GET /applications/reference/SA-000001`** → same application, looked
+   up by its human-readable code instead of the internal id.
+4. **Try `PATCH /applications/1/status`** while still logged in as a
+   citizen → you should get **403** — citizens can view status, never set it.
+5. **Log in as the OFFICER account.** `PATCH /applications/1/status`
+   with `{"status": "under_review"}` → succeeds.
+6. **Try skipping a step:** same endpoint with `{"status": "approved"}`
+   directly from `submitted` (if you reset/create a fresh application)
+   → you should get a **400** explaining which transitions are actually
+   allowed. This proves the workflow rules are enforced, not just suggested.
+7. From `under_review`, `{"status": "approved"}` → now succeeds.
+
+### 4. Test the grievance workflow
+
+1. Log in as citizen → **`POST /grievances`** with a `department_id`,
+   `subject`, `details` → starts at `status: "open"`.
+2. **`GET /grievances`** as citizen → only your own.
+3. Log in as OFFICER → **`GET /grievances`** → sees every grievance.
+4. **`PATCH /grievances/1/respond`** with `{"response": "...", "status": "in_progress"}`
+   → succeeds, both fields update together.
+5. Try `{"status": "open"}` afterwards (going backwards) → **400**,
+   since `in_progress` can only move forward to `resolved`.
+
+### Concepts this phase teaches
+
+- **Server-generated identifiers** — `reference_no` is built from the
+  row's own database id AFTER insert (`db.flush()` first to get the
+  id, then set the field, then `db.commit()`), guaranteeing uniqueness
+  without extra checks.
+- **State machines** — `workflow.py`'s transition dictionaries are a
+  tiny, explicit state machine. This pattern (a dict of allowed
+  next-steps) scales to far more complex workflows than if/elif chains would.
+- **Layered dependencies** — `get_current_citizen_profile` builds on
+  `get_current_user`, which builds on decoding the JWT. Each endpoint
+  only asks for the dependency it actually needs.
+- **PATCH vs PUT** — applications/grievances use PATCH for status
+  changes specifically because you're changing ONE field with special
+  rules, not replacing the whole resource.
+
+### Don't forget to commit
+
+```powershell
+git add .
+git commit -m "Phase 5: service applications and grievances with controlled workflows"
+git push
+```
+
 ## Next phase
 
-**Phase 5** builds the actual citizen-facing workflows: submitting a
-service application (with an auto-generated reference number),
-officers updating application status through controlled transitions,
-and the full grievance submit → officer response cycle.
+**Phase 6** adds document upload: admins/officers can upload approved
+guideline files (PDF/DOCX/TXT/Markdown), which get stored with
+metadata ready for the RAG indexing pipeline in Phase 7.
 
 Just say "next phase" when you're ready.
