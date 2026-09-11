@@ -480,10 +480,100 @@ git commit -m "Phase 5: service applications and grievances with controlled work
 git push
 ```
 
+## Phase 6 — Document upload and text extraction
+
+New files:
+```
+app/
+├── db/models/
+│   └── knowledge_document.py   # KnowledgeDocument table
+├── schemas/
+│   └── document.py              # DocumentOut, DocumentDetailOut
+├── services/
+│   └── document_loader.py       # extract_text() for pdf/docx/txt/md
+└── api/
+    └── documents.py              # /documents upload, list, get, delete
+data/
+├── storage/                      # uploaded files land here (git-ignored)
+└── knowledge_base/               # reserved for committed sample docs later
+```
+
+### 1. Install the new packages
+
+```powershell
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 2. Generate and run the migration
+
+```powershell
+alembic revision --autogenerate -m "add knowledge documents"
+alembic upgrade head
+```
+
+### 3. Run the server and test uploads
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+Swagger's file upload fields look a little different from JSON
+endpoints — you'll see separate boxes for `title`, `department_id`,
+`service_id`, and a **Choose File** button, instead of one JSON body.
+
+1. Log in as ADMIN via Authorize.
+2. **`POST /documents/upload`** → Try it out → fill `title` (e.g.
+   "Water Connection Guidelines"), leave `department_id`/`service_id`
+   blank or set to `1`, click **Choose File** and pick any small
+   `.txt` or `.md` file from your computer (even a one-line text file
+   works) → Execute.
+3. Check the response: `"processing_status": "extracted"` and
+   `"text_preview"` should show the start of your file's actual content.
+4. **`GET /documents`** → confirms it's listed.
+5. **`GET /documents/{id}`** → now shows the FULL `extracted_text`,
+   not just the preview.
+6. Try uploading a `.pdf` if you have one handy — same flow, just
+   using `pypdf` under the hood instead of reading the file directly.
+7. Try uploading a `.exe` or `.jpg` → you should get a clean
+   **400 error** listing the allowed file types.
+8. Log in as CITIZEN and try `POST /documents/upload` → **403**,
+   confirms only admin/officer can upload.
+9. **`DELETE /documents/{id}`** while logged in as OFFICER → **403**
+   (delete is admin-only, upload is admin+officer — a deliberately
+   different rule, since deleting source material is more sensitive
+   than adding it).
+
+### Concepts this phase teaches
+
+- **Multipart file uploads** — `UploadFile` + `Form(...)` fields is
+  FastAPI's pattern for "a file plus some other form data in the same
+  request," different from a JSON body.
+- **Never trust the original filename** — we generate a random
+  filename (`uuid.uuid4().hex`) for the actual file on disk. Two
+  people uploading "guidelines.pdf" would otherwise silently overwrite
+  each other.
+- **Graceful degradation** — if text extraction fails (corrupted
+  file, unsupported internal format), we catch the exception and mark
+  `processing_status: "failed"` with an error message, rather than
+  crashing the whole upload. The file and its metadata are still saved.
+- **Lightweight list vs full detail** — `GET /documents` returns short
+  previews; `GET /documents/{id}` returns everything. This is a common
+  API pattern once records can contain a lot of text.
+
+### Don't forget to commit
+
+```powershell
+git add .
+git commit -m "Phase 6: document upload and text extraction"
+git push
+```
+
 ## Next phase
 
-**Phase 6** adds document upload: admins/officers can upload approved
-guideline files (PDF/DOCX/TXT/Markdown), which get stored with
-metadata ready for the RAG indexing pipeline in Phase 7.
+**Phase 7** builds the actual RAG indexing pipeline: chunking the
+extracted text into smaller pieces, generating embeddings for each
+chunk, storing them in a vector store, and implementing similarity
+search — the foundation the Phase 8 chatbot will query against.
 
 Just say "next phase" when you're ready.

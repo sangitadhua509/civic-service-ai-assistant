@@ -21,3 +21,4 @@ from app.db.models.service import Service  # noqa: F401
 from app.db.models.citizen import Citizen  # noqa: F401
 from app.db.models.service_application import ServiceApplication  # noqa: F401
 from app.db.models.grievance import Grievance  # noqa: F401
+from app.db.models.knowledge_document import KnowledgeDocument  # noqa: F401

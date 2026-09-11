@@ -13,3 +13,8 @@ bcrypt>=4.2.0
 pyjwt>=2.9.0
 python-multipart>=0.0.9
 email-validator>=2.2.0
+
+# Phase 6 — document upload and text extraction
+pypdf>=5.0.0
+python-docx>=1.2.0
+lxml>=6.0.1
