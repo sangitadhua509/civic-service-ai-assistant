@@ -6,7 +6,7 @@ Each feature area (auth, departments, services, citizens,
 applications, grievances) lives in its own router file under
 app/api/, and gets plugged in below with one line each.
 """
-
+from app.api.chat import router as chat_router
 from fastapi import FastAPI
 
 from app.core.config import settings
@@ -44,6 +44,7 @@ app.include_router(citizens_router)
 app.include_router(applications_router)
 app.include_router(grievances_router)
 app.include_router(documents_router)
+app.include_router(chat_router)
 
 
 @app.get("/")

@@ -1,39 +1,34 @@
-def chunk_text(
-    text: str,
-    chunk_size: int = 500,
-    overlap: int = 50
-) -> list[str]:
-    """
-    Split extracted document text into smaller overlapping chunks.
-
-    chunk_size = maximum number of words in one chunk
-    overlap = number of words shared between consecutive chunks
-    """
-
+def chunk_text(text: str, chunk_size: int = 500, overlap:     int = 50) -> list[str]:
     words = text.split()
 
-    if not words:
-        return []
-
-    if overlap >= chunk_size:
-        raise ValueError("overlap must be smaller than chunk_size")
-
     chunks = []
+    current_chunk = []
+    current_length = 0
 
-    start = 0
+    for word in words:
+        word_length = len(word) + 1
 
-    while start < len(words):
+        if current_length + word_length > chunk_size and current_chunk:
+            chunks.append(" ".join(current_chunk))
 
-        end = start + chunk_size
+            overlap_words = []
+            overlap_length = 0
 
-        chunk = " ".join(words[start:end])
+            for previous_word in reversed(current_chunk):
+                if overlap_length + len(previous_word) + 1 > overlap:
+                    break
 
-        chunks.append(chunk)
+                overlap_words.insert(0, previous_word)
+                overlap_length += len(previous_word) + 1
 
-        if end >= len(words):
-            break
+            current_chunk = overlap_words
+            current_length = sum(len(w) + 1 for w in current_chunk)
 
-        start = end - overlap
+        current_chunk.append(word)
+        current_length += word_length
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
 
     return chunks
 
